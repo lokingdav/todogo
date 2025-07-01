@@ -14,6 +14,8 @@ const (
 	taskList     = "list"
 )
 
+var version = "dev"
+
 type task struct {
 	id   int
 	name string
@@ -76,12 +78,21 @@ func listTasks(tasks map[int]task) {
 
 func main() {
 	var taskId int
+	var showVersion bool
 	var name, desc, cmd string
 
+	flag.BoolVar(&showVersion, "version", false, "Show version number")
 	flag.IntVar(&taskId, "id", 0, "The Task ID")
 	flag.StringVar(&name, "name", "", "The name of the Task Name")
 	flag.StringVar(&desc, "desc", "", "The description of the Task")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println("Version:", version)
+		if len(flag.Args()) == 0 {
+			return
+		}
+	}
 
 	if args := flag.Args(); len(args) > 0 && (args[0] == taskAdd ||
 		args[0] == taskDelete ||
@@ -94,14 +105,6 @@ func main() {
 	}
 
 	var tasks = make(map[int]task, 0)
-
-	// var tid1 = addTask(name, desc, tasks)
-	// addTask(name, desc, tasks)
-	// listTasks(tasks)
-	// completeTask(tid1, tasks)
-	// listTasks(tasks)
-	// deleteTask(tid1, tasks)
-	// listTasks(tasks)
 
 	switch cmd {
 	case taskAdd:
