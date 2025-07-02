@@ -18,7 +18,7 @@ const (
 )
 
 var version = "dev"
-var dbfile = "tasks.json"
+var dbfile = "tasksdb.json"
 
 type task struct {
 	Id        int    `json:"id"`
