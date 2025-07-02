@@ -4,7 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	// "os"
+
+	"os"
+	"log"
+	"encoding/json"
 )
 
 const (
@@ -15,12 +18,48 @@ const (
 )
 
 var version = "dev"
+var dbfile = "tasks.json"
 
 type task struct {
-	id   int
-	name string
-	desc string
-	done bool
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Desc      string `json:"desc"`
+	Completed bool   `json:"completed"`
+}
+
+func logErr(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func saveTasks(tasks map[int]task) {
+	var file, err = os.Create(dbfile)
+	logErr(err)
+	defer file.Close()
+
+	var encoder = json.NewEncoder(file)
+	err = encoder.Encode(tasks)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func loadTasks() map[int]task {
+	if _, err := os.Stat(dbfile); os.IsNotExist(err) {
+		return map[int]task{}
+	}
+
+	var tasks map[int]task
+
+	var file, err = os.Open(dbfile)
+	logErr(err)
+	defer file.Close()
+
+	var decoder = json.NewDecoder(file)
+	err = decoder.Decode(&tasks)
+	logErr(err)
+	return tasks
 }
 
 func addTask(name, desc string, tasks map[int]task) int {
@@ -35,14 +74,11 @@ func addTask(name, desc string, tasks map[int]task) int {
 	}
 
 	if len(validationErrors) > 0 {
-		fmt.Println("There are some validation errors:")
-		for _, err := range validationErrors {
-			fmt.Println("\t" + err)
-		}
-		return 0
+		log.Fatal("Validate Errors: ", validationErrors)
 	}
 
 	var taskId = rand.Int() % 1000
+	fmt.Println("Adding task: ", taskId)
 	tasks[taskId] = task{taskId, name, desc, false}
 	return taskId
 }
@@ -54,24 +90,27 @@ func deleteTask(taskId int, tasks map[int]task) {
 
 func completeTask(taskId int, tasks map[int]task) {
 	fmt.Println("\nCompleting task: ", taskId)
-	tasks[taskId] = task{taskId, tasks[taskId].name, tasks[taskId].desc, true}
+	if tsk, ok := tasks[taskId]; ok {
+		tasks[taskId] = task{taskId, tsk.Name, tsk.Desc, true}
+	} else {
+		log.Fatalf("Task %d does not exists", taskId)
+	}
 }
 
 func listTasks(tasks map[int]task) {
 	if len(tasks) == 0 {
-		fmt.Println("There are not available tasks")
-		return
+		log.Fatal("There are not available tasks")
 	}
 
 	fmt.Printf("\n==================== START Tasks List (%d) ====================\n", len(tasks))
 	for k, v := range tasks {
 		var status string
-		if v.done {
+		if v.Completed {
 			status = "Yes"
 		} else {
 			status = "No"
 		}
-		fmt.Printf("\nID: %d\nName: %s\nDesc: %s\nDone: %s\n", k, v.name, v.desc, status)
+		fmt.Printf("\nID: %d\nName: %s\nDesc: %s\nCompleted: %s\n", k, v.Name, v.Desc, status)
 	}
 	fmt.Println("\n==================== END Tasks List ====================")
 }
@@ -100,11 +139,10 @@ func main() {
 		args[0] == taskList) {
 		cmd = args[0]
 	} else {
-		fmt.Printf("Command (%s|%s|%s|%s) is required", taskAdd, taskDelete, taskComplete, taskList)
-		return
+		log.Fatalf("Command (%s|%s|%s|%s) is required", taskAdd, taskDelete, taskComplete, taskList)
 	}
 
-	var tasks = make(map[int]task, 0)
+	var tasks = loadTasks()
 
 	switch cmd {
 	case taskAdd:
@@ -113,7 +151,7 @@ func main() {
 		listTasks(tasks)
 	default:
 		if taskId == 0 {
-			fmt.Println("You must provide a Task ID --id")
+			log.Fatal("You must provide a Task ID --id")
 		}
 		switch cmd {
 		case taskDelete:
@@ -122,4 +160,6 @@ func main() {
 			completeTask(taskId, tasks)
 		}
 	}
+
+	saveTasks(tasks)
 }
