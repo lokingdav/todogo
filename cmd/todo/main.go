@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
-
 	"os"
 	"log"
 	"encoding/json"
@@ -27,42 +25,55 @@ type task struct {
 	Completed bool   `json:"completed"`
 }
 
+
+
 func logErr(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func saveTasks(tasks map[int]task) {
+func saveTasks(autoInc int, tasks map[int]task) {
 	var file, err = os.Create(dbfile)
 	logErr(err)
 	defer file.Close()
 
 	var encoder = json.NewEncoder(file)
-	err = encoder.Encode(tasks)
+	var dbdata = map[string]interface{}{
+		"autoInc": autoInc,
+		"tasks": tasks,
+	}
+	err = encoder.Encode(dbdata)
+	
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func loadTasks() map[int]task {
+func loadTasks() (int, map[int]task) {
 	if _, err := os.Stat(dbfile); os.IsNotExist(err) {
-		return map[int]task{}
+		return 0, map[int]task{}
 	}
 
-	var tasks map[int]task
+	type dbFormat struct {
+		AutoInc int            `json:"autoInc"`
+		Tasks   map[int]task   `json:"tasks"`
+	}
+
+	var dbdata dbFormat
 
 	var file, err = os.Open(dbfile)
 	logErr(err)
 	defer file.Close()
 
 	var decoder = json.NewDecoder(file)
-	err = decoder.Decode(&tasks)
+	err = decoder.Decode(&dbdata)
 	logErr(err)
-	return tasks
+
+	return dbdata.AutoInc, dbdata.Tasks
 }
 
-func addTask(name, desc string, tasks map[int]task) int {
+func addTask(taskId int, name, desc string, tasks map[int]task) int {
 	var validationErrors []string = make([]string, 0, 2)
 
 	if name == "" {
@@ -77,7 +88,6 @@ func addTask(name, desc string, tasks map[int]task) int {
 		log.Fatal("Validate Errors: ", validationErrors)
 	}
 
-	var taskId = rand.Int() % 1000
 	fmt.Println("Adding task: ", taskId)
 	tasks[taskId] = task{taskId, name, desc, false}
 	return taskId
@@ -97,13 +107,17 @@ func completeTask(taskId int, tasks map[int]task) {
 	}
 }
 
-func listTasks(tasks map[int]task) {
+func listTasks(tasks map[int]task, completed int) {
 	if len(tasks) == 0 {
 		log.Fatal("There are not available tasks")
 	}
 
 	fmt.Printf("\n==================== START Tasks List (%d) ====================\n", len(tasks))
 	for k, v := range tasks {
+		if (completed == 0 && v.Completed) || (completed == 1 && !v.Completed) {
+			continue
+		}
+
 		var status string
 		if v.Completed {
 			status = "Yes"
@@ -116,7 +130,7 @@ func listTasks(tasks map[int]task) {
 }
 
 func main() {
-	var taskId int
+	var taskId, completed int
 	var showVersion bool
 	var name, desc, cmd string
 
@@ -124,6 +138,7 @@ func main() {
 	flag.IntVar(&taskId, "id", 0, "The Task ID")
 	flag.StringVar(&name, "name", "", "The name of the Task Name")
 	flag.StringVar(&desc, "desc", "", "The description of the Task")
+	flag.IntVar(&completed, "completed", -1, "Completed (0|1)")
 	flag.Parse()
 
 	if showVersion {
@@ -142,13 +157,14 @@ func main() {
 		log.Fatalf("Command (%s|%s|%s|%s) is required", taskAdd, taskDelete, taskComplete, taskList)
 	}
 
-	var tasks = loadTasks()
+	var  autoInc, tasks = loadTasks()
 
 	switch cmd {
 	case taskAdd:
-		addTask(name, desc, tasks)
+		autoInc++
+		addTask(autoInc, name, desc, tasks)
 	case taskList:
-		listTasks(tasks)
+		listTasks(tasks, completed)
 	default:
 		if taskId == 0 {
 			log.Fatal("You must provide a Task ID --id")
@@ -161,5 +177,5 @@ func main() {
 		}
 	}
 
-	saveTasks(tasks)
+	saveTasks(autoInc, tasks)
 }
